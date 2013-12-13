@@ -3,7 +3,7 @@
 #include "Parms.h"
 #include "File.h"
 #include "Conf.h"
-#include "CollectionRec.h"
+//#include "CollectionRec.h"
 #include "TcpSocket.h"
 #include "HttpRequest.h"
 #include "Pages.h"         // g_pages
@@ -50,17 +50,6 @@ Parms g_parms;
 // new functions to extricate info from parm recs
 //
 
-// . occNum is index # for parms that are arrays. it is -1 if not used.
-// . collnum is -1 for g_conf, which is not a collrec
-key96_t makeParmKey ( collnum_t collnum , Parm *m , long occNum ) {
-	key96_t k;
-	k.n1 = collnum;
-	k.n0 = m->m_cgiHash; // 32 bit
-	k.n0 <<= 31;
-	k.n0 |= occNum;
-	k.n0 <<= 1;
-	return k;
-}
 
 long getDataSizeFromParmRec ( char *rec ) {
 	return *(long *)(rec+sizeof(key96_t));
@@ -76,15 +65,34 @@ collnum_t getCollnumFromParmRec ( char *rec ) {
 }
 
 // for parms that are arrays...
-collnum_t getOccNumFromParmRec ( char *rec ) {
+short getOccNumFromParmRec ( char *rec ) {
 	key96_t *k = (key96_t *)rec;
-	return (collnum_t)((k->n0>>1)&0xffffffff);
+	return (short)((k->n0>>16));
 }
 
 Parm *getParmFromParmRec ( char *rec ) {
 	key96_t *k = (key96_t *)rec;
 	long cgiHash32 = (k->n0 >> 32);
 	return g_parms.getParmFast2 ( cgiHash32 );
+}
+
+// . occNum is index # for parms that are arrays. it is -1 if not used.
+// . collnum is -1 for g_conf, which is not a collrec
+// . occNUm is -1 for a non-array parm
+key96_t makeParmKey ( collnum_t collnum , Parm *m , short occNum ) {
+	key96_t k;
+	k.n1 = collnum;
+	k.n0 = (unsigned long)m->m_cgiHash; // 32 bit
+	k.n0 <<= 16;
+	k.n0 |= (unsigned short)occNum;
+	// blanks
+	k.n0 <<= 16;
+	// delbit. 1 means positive key
+	k.n0 |= 0x01;
+	// test
+	if ( getCollnumFromParmRec ((char *)&k)!=collnum){char*xx=NULL;*xx=0;}
+	if ( getOccNumFromParmRec ((char *)&k)!=occNum){char*xx=NULL;*xx=0;}
+	return k;
 }
 
 //////////////////////////////////////////////
@@ -3538,7 +3546,7 @@ void Parms::setParm ( char *THIS , Parm *m , long mm , long j , char *s ,
  changed:
 	// tell gigablast the value is EXPLICITLY given -- no longer based
 	// on default.conf
-	if ( m->m_obj == OBJ_COLL ) ((CollectionRec *)THIS)->m_orig[mm] = 2;
+	//if ( m->m_obj == OBJ_COLL ) ((CollectionRec *)THIS)->m_orig[mm] = 2;
 
 	// we do not recognize timezones corectly when this is serialized
 	// into coll.conf, it says UTC, which is ignored in HttpMime.cpp's
@@ -3657,7 +3665,7 @@ void Parms::setToDefault ( char *THIS ) {
 			//	log("hey");
 			setParm ( THIS , m, i, 0, m->m_def, false/*not enc.*/,
 				  false );
-			((CollectionRec *)THIS)->m_orig[i] = 1;
+			//((CollectionRec *)THIS)->m_orig[i] = 1;
 			//m->m_orig = 0; // set in setToDefaults()
 		}
 		// these are special, fixed size arrays
@@ -3666,7 +3674,7 @@ void Parms::setToDefault ( char *THIS ) {
 				setParm(THIS,m,i,k,m->m_def,false/*not enc.*/,
 					false);
 				//m->m_orig = 0; // set in setToDefaults()
-				((CollectionRec *)THIS)->m_orig[i] = 1;
+				//((CollectionRec *)THIS)->m_orig[i] = 1;
 			}
 			continue;
 		}
@@ -3700,13 +3708,14 @@ bool Parms::setFromFile ( void *THIS        ,
 	// . all the collectionRecs have the same default file in
 	//   the workingDir/collections/default.conf
 	// . so use our built in buffer for that
+	/*
 	if ( THIS != &g_conf && ! m_isDefaultLoaded ) {
 		m_isDefaultLoaded = true;
 		File f;
 		f.set ( filenameDef );
 		if ( ! f.doesExist() ) {
 			log(LOG_INIT,
-			    "admin: Default collection configuration file "
+			    "db: Default collection configuration file "
 			    "%s was not found. Newly created collections "
 			    "will use hard coded defaults.",f.getFilename());
 			goto skip;
@@ -3718,6 +3727,7 @@ bool Parms::setFromFile ( void *THIS        ,
 	}
 
  skip:
+	*/
 	long  vlen;
 	char *v ;
 	//char  c ;
@@ -3833,7 +3843,7 @@ bool Parms::setFromFile ( void *THIS        ,
 		setParm ( (char *)THIS, m, i, j, v, false/*is html encoded?*/,
 			  false );
 		// we were set from the explicit file
-		((CollectionRec *)THIS)->m_orig[i] = 2;
+		//((CollectionRec *)THIS)->m_orig[i] = 2;
 		// go back
 		//v[vlen] = c;
 		// do not repeat same node
@@ -3915,7 +3925,7 @@ bool Parms::setFromFile ( void *THIS        ,
 		setParm ( (char *)THIS, m, i, j, v, false/*is html encoded?*/,
 			  false );
 		// we were set from the backup default file
-		((CollectionRec *)THIS)->m_orig[i] = 1;
+		//((CollectionRec *)THIS)->m_orig[i] = 1;
 		// go back
 		//v[vlen] = c;
 		// do not repeat same node
@@ -3928,9 +3938,9 @@ bool Parms::setFromFile ( void *THIS        ,
 
 	// always make sure we got some admin security
 	if ( g_conf.m_numMasterIps <= 0 && g_conf.m_numMasterPwds <= 0 ) {
-		log(LOG_INFO,
-		    "conf: No master IP or password provided. Using default "
-		    "password 'footbar23'." );
+		//log(LOG_INFO,
+		//    "conf: No master IP or password provided. Using default "
+		//    "password 'footbar23'." );
 		//g_conf.m_masterIps[0] = atoip ( "64.139.94.202", 13 );
 		//g_conf.m_numMasterIps = 1;
 		strcpy ( g_conf.m_masterPwds[0] , "footbar23" );
@@ -5798,7 +5808,7 @@ void Parms::init ( ) {
 
 	m->m_title = "all spiders on";
 	m->m_desc  = "Enable spidering on all hosts";
-	m->m_cgi   = "se";
+	m->m_cgi   = "ase";
 	m->m_def   = "1";
 	m->m_off   = (char *)&g_conf.m_spideringEnabled - g;
 	m->m_type  = TYPE_BOOL2; // no yes or no, just a link
@@ -5806,7 +5816,7 @@ void Parms::init ( ) {
 
 	m->m_title = "all spiders off";
 	m->m_desc  = "Disable spidering on all hosts";
-	m->m_cgi   = "se";
+	m->m_cgi   = "ase";
 	m->m_def   = "0";
 	m->m_off   = (char *)&g_conf.m_spideringEnabled - g;
 	m->m_type  = TYPE_BOOL2; // no yes or no, just a link
@@ -16610,6 +16620,7 @@ bool Parms::addNewParmToList2 ( SafeBuf *parmList ,
 		valSize = 8;
 	}
 	else if ( m->m_type == TYPE_BOOL ||
+		  m->m_type == TYPE_BOOL2 ||
 		  m->m_type == TYPE_CHAR ) {
 		val8 = atol(parmValString);
 		val = (char *)&val8;
@@ -16711,10 +16722,12 @@ bool Parms::convertHttpRequestToParmList (HttpRequest *hr, SafeBuf *parmList){
 	// this points into a static buf so be careful!
 	char *c = hr->getString("c",NULL);
 
-	if ( c && ! c[0] ) {
-		log("parms: no coll given");
-		g_errno = ENOCOLLREC;
-		return false;
+	if ( ! c || ! c[0] ) {
+		//log("parms: no coll given");
+		//g_errno = ENOCOLLREC;
+		//return false;
+		// might be a page without coll or parms that need it
+		return true;
 	}
 
 	// . this is the collection we are operating on
@@ -16764,7 +16777,7 @@ bool Parms::convertHttpRequestToParmList (HttpRequest *hr, SafeBuf *parmList){
 		// if its a resetcoll/restartcoll/addcoll we have to
 		// get the next available collnum and use that for setting
 		// any additional parms. that is the coll it will act on.
-		if ( strcmp(m->m_title,"addcoll") ||
+		if ( strcmp(m->m_title,"addcoll") == 0 ||
 		     strcmp(m->m_title,"addcrawl") == 0 ||
 		     strcmp(m->m_title,"addbulk" ) == 0 ||
 		     strcmp(m->m_title,"resetcoll" ) == 0 ||
@@ -16815,11 +16828,12 @@ bool Parms::convertHttpRequestToParmList (HttpRequest *hr, SafeBuf *parmList){
 
 		// add it to a list now
 		if ( ! addNewParmToList2 ( parmList ,
-					   cr->m_collnum ,
-					   valString , 
 					   // HACK! operate on the to-be-added
-					   // collrec
-					   (long)parmCollnum , // occNum
+					   // collrec, if there was an addcoll
+					   // reset or restart coll cmd...
+					   parmCollnum ,
+					   valString , 
+					   occNum ,
 					   m ) )
 			return false;
 	}
@@ -16848,7 +16862,20 @@ Parm *Parms::getParmFast2 ( long cgiHash32 ) {
 			// get its hash of its cgi
 			long ph32 = parm->m_cgiHash;
 			// sanity!
-			if ( s_pht.isInTable ( &ph32 ) ) {char *xx=NULL;*xx=0;}
+			if ( s_pht.isInTable ( &ph32 ) ) {
+				// get the dup guy
+				Parm *dup = *(Parm **)s_pht.getValue(&ph32);
+				// same underlying parm?
+				// like for "all spiders on" vs.
+				// "all spiders off"?
+				if ( dup->m_off == parm->m_off )
+					continue;
+				// otherwise bitch about it and drop core
+				log("parms: dup parm h32=%li "
+				    "\"%s\" vs \"%s\"",
+				    ph32, dup->m_title,parm->m_title);
+				char *xx=NULL;*xx=0;
+			}
 			// add that to hash table
 			s_pht.addKey ( &ph32 , &parm );
 		}
@@ -16856,8 +16883,9 @@ Parm *Parms::getParmFast2 ( long cgiHash32 ) {
 		s_init = true;
 	}
 
-	Parm *parm = (Parm *)s_pht.getValue ( &cgiHash32 );
-	return parm;
+	Parm **pp = (Parm **)s_pht.getValue ( &cgiHash32 );
+	if ( ! pp ) return NULL;
+	return *pp;
 }
 
 
@@ -16888,6 +16916,8 @@ Parm *Parms::getParmFast1 ( char *cgi , long *occNum ) {
 
 	Parm *m = getParmFast2 ( h32 );
 
+	if ( ! m ) return NULL;
+
 	// the first element does not have a number after it
 	if ( m->isArray() && occNum && *occNum == -1 )
 		*occNum = 0;
@@ -16906,6 +16936,8 @@ public:
 	SafeBuf m_parmList;
 	long m_numRequests;
 	long m_numReplies;
+	long m_numGoodReplies;
+	long m_numHostsTotal;
 	class ParmNode *m_nextNode;
 	long long m_parmId;
 	bool m_calledCallback;
@@ -16949,6 +16981,8 @@ bool Parms::broadcastParmList ( SafeBuf *parmList ,
 	pn->m_parmList.stealBuf ( parmList );
 	pn->m_numRequests    = 0;
 	pn->m_numReplies     = 0;
+	pn->m_numGoodReplies = 0;
+	pn->m_numHostsTotal  = 0;
 	pn->m_nextNode       = NULL;
 	pn->m_parmId         = s_parmId; // take a ticket
 	pn->m_calledCallback = false;
@@ -16968,6 +17002,13 @@ bool Parms::broadcastParmList ( SafeBuf *parmList ,
 		s_tailNode->m_nextNode = pn;
 		s_tailNode = pn;
 	}
+
+	// just the regular proxies, not compression proxies
+	if ( pn->m_sendToProxies ) 
+		pn->m_numHostsTotal += g_hostdb.getNumProxies();
+
+	if ( pn->m_sendToGrunts )
+		pn->m_numHostsTotal += g_hostdb.getNumGrunts();
 
 	// pump the parms out to other hosts in the network
 	doParmSendingLoop ( );
@@ -16992,9 +17033,10 @@ void tryToCallCallbacks ( ) {
 	for ( ; pn ; pn = pn->m_nextNode ) {
 		// skip if already called callback
 		if ( pn->m_calledCallback ) continue;
-		// 8 seconds is enough!
+		// should we call the callback?
 		bool callIt = false;
-		if ( now - pn->m_startTime > 8000 ) callIt = true;
+		// 8 seconds is enough to wait for all replies to come in
+		if ( now - pn->m_startTime > 8 ) callIt = true;
 		if ( pn->m_numReplies >= pn->m_numRequests ) callIt = true;
 		if ( ! callIt ) continue;
 		pn->m_callback ( pn->m_state );
@@ -17004,12 +17046,18 @@ void tryToCallCallbacks ( ) {
 
 void gotParmReplyWrapper ( void *state , UdpSlot *slot ) {
 
+	// don't let upserver free the send buf! that's the ParmNode parmlist
+	slot->m_sendBufAlloc = NULL;
+
 	// in case host table is dynamically modified, go by #
 	Host *h = g_hostdb.getHost((long)state);
 
 	long parmId = h->m_currentParmIdInProgress;
 
 	ParmNode *pn = h->m_currentNodePtr;
+
+	// inc this count
+	pn->m_numReplies++;
 
 	// nothing in progress now
 	h->m_currentParmIdInProgress = 0;
@@ -17034,7 +17082,7 @@ void gotParmReplyWrapper ( void *state , UdpSlot *slot ) {
 	h->m_lastParmIdCompleted = parmId;
 
 	// inc this count
-	pn->m_numReplies++;
+	pn->m_numGoodReplies++;
 
 	// . this will try to call any callback that can be called
 	// . for instances, if the "pn" has recvd all the replies
@@ -17043,13 +17091,16 @@ void gotParmReplyWrapper ( void *state , UdpSlot *slot ) {
 	tryToCallCallbacks ();
 
 	// nuke it?
-	if ( pn->m_numReplies >= pn->m_numRequests ) {
+	if ( pn->m_numGoodReplies >= pn->m_numHostsTotal &&
+	     pn->m_numReplies >= pn->m_numRequests ) {
 		// we must always be the head lest we send out of order.
 		if ( pn != s_headNode ) { char *xx=NULL;*xx=0; }
 		// a new head
 		s_headNode = pn->m_nextNode;
 		// empty?
 		if ( ! s_headNode ) s_tailNode = NULL;
+		// wtf?
+		if ( ! pn->m_calledCallback ) { char *xx=NULL;*xx=0; }
 		// do callback first before freeing pn
 		//if ( pn->m_callback ) pn->m_callback ( pn->m_state );
 		//if ( pn->m_prevNode ) 
@@ -17063,6 +17114,9 @@ void gotParmReplyWrapper ( void *state , UdpSlot *slot ) {
 	g_parms.doParmSendingLoop();
 }
 
+// . host #0 runs this to send out parms in the the parm queue (linked list)
+//   to all other hosts.
+// . he also sends to himself, if m_sendToGrunts is true
 bool Parms::doParmSendingLoop ( ) {
 
 	if ( ! s_headNode ) return true;
@@ -17095,13 +17149,16 @@ bool Parms::doParmSendingLoop ( ) {
 			h->m_currentNodePtr = NULL;
 			continue;
 		}
+
+		// count it
+		pn->m_numRequests++;
 		// ok, he's available
 		if ( ! g_udpServer.sendRequest ( pn->m_parmList.getBufStart(),
 						 pn->m_parmList.length() ,
 						 // a new msgtype
 						 0x3f,
-						 0, // ip
-						 0, // port
+						 h->m_ip, // ip
+						 h->m_port, // port
 						 h->m_hostId ,
 						 NULL, // retslot
 						 (void *)h->m_hostId , // state
@@ -17194,7 +17251,7 @@ void handleRequest3f ( UdpSlot *slot , long niceness ) {
 	char *parmEnd  = parmRecs + slot->m_readBufSize;
 	// make a new waiting entry
 	WaitEntry *we ;
-	we = (WaitEntry *) mmalloc ( sizeof(WaitEntry *),"weparm");
+	we = (WaitEntry *) mmalloc ( sizeof(WaitEntry),"weparm");
 	if ( ! we ) {
 		g_udpServer.sendErrorReply(slot,g_errno,60);
 		return;
@@ -17262,6 +17319,8 @@ bool Parms::syncParmsWithHost0 ( ) {
 	
 	if ( ! makeSyncHashList ( &hashList ) ) return false;
 
+	Host *h = g_hostdb.getHost(0);
+
 	// . send it off. use 3e i guess
 	// . host #0 will reply using msg4 really
 	// . msg4 guarantees ordering of requests
@@ -17270,9 +17329,9 @@ bool Parms::syncParmsWithHost0 ( ) {
 	if ( ! g_udpServer.sendRequest ( hashList.getBufStart() ,
 					 hashList.length() ,
 					 0x3e , // msgtype
-					 0, // ip
-					 0, // port
-					 0 , // hostid , host #0!!!
+					 h->m_ip, // ip
+					 h->m_port, // port
+					 h->m_hostId , // hostid , host #0!!!
 					 NULL, // retslot
 					 NULL , // state
 					 gotReplyFromHost0Wrapper ,
@@ -17534,9 +17593,13 @@ bool Parms::updateParm ( char *rec , WaitEntry *we ) {
 
 	// what are we updating?
 	void *base = NULL;
-	if ( cr ) base = cr;
-	else      base = &g_conf;
 
+	// we might have a collnum specified even if parm is global,
+	// maybe there are some collection/local parms specified as well
+	// that that collnum applies to
+	if ( parm->m_obj == OBJ_COLL ) base = cr;
+	else                           base = &g_conf;
+		
 	long occNum = getOccNumFromParmRec ( rec );
 
 	// get data

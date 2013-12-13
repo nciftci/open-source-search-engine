@@ -15,7 +15,7 @@
 #include <sys/ioctl.h>            // ioctl() - get our ip address from a socket
 #include <net/if.h>               // for struct ifreq passed to ioctl()    
 //#include "../../rsa/rsa.h"        // public_key private_key vlong (seals)
-#include "Conf.h"       // for getting m_groupId/m_groupMask
+//#include "Conf.h"       // for getting m_groupId/m_groupMask
 #include "Xml.h" // host file in xml
 
 // the default mattster udp port (also re-defined in conf/Conf.cpp) TODO: unify
@@ -447,6 +447,8 @@ class Hostdb {
 
 	long  getNumHosts ( ) { return m_numHosts; };
 	long  getNumProxy ( ) { return m_numProxyHosts; };
+	long getNumProxies ( ) { return m_numProxyHosts; };
+	long getNumGrunts  ( ) { return m_numHosts; };
 	// how many of the hosts are non-dead?
 	long  getNumHostsAlive ( ) { return m_numHostsAlive; };
 	long  getNumProxyAlive ( ) { return m_numProxyAlive; };

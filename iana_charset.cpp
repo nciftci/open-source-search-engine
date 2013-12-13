@@ -5,6 +5,7 @@
 #include "gb-include.h"
 #include "iana_charset.h"
 #include "HashTableX.h"
+#include "Conf.h"
 #include "hash.h"
 
 typedef struct {

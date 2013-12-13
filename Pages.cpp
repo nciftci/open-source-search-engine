@@ -4,7 +4,7 @@
 #include "Pages.h"
 #include "Parms.h"
 #include "Collectiondb.h"
-#include "CollectionRec.h"
+//#include "CollectionRec.h"
 #include "Tagdb.h"
 #include "Categories.h"
 #include "Proxy.h"
@@ -589,6 +589,7 @@ bool Pages::sendDynamicReply ( TcpSocket *s , HttpRequest *r , long page ) {
 	
 	// . convert http request to list of parmdb records
 	// . will only add parm recs we have permission to modify
+	// . if no collection supplied will just return true with no g_errno
 	if ( ! g_parms.convertHttpRequestToParmList ( r , parmList ) )
 		return g_httpServer.sendErrorReply(s,505,mstrerror(g_errno));
 		
