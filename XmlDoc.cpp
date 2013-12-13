@@ -185,6 +185,8 @@ static long long s_lastTimeStart = 0LL;
 
 void XmlDoc::reset ( ) {
 
+	m_sectiondbData.purge();
+
 	m_mySiteLinkInfoBuf.purge();
 	m_myPageLinkInfoBuf.purge();
 	m_myTempLinkInfoBuf.purge();
@@ -809,7 +811,7 @@ void XmlDoc::reset ( ) {
 	m_useTagdb     = true;
 	m_usePlacedb   = true;
 	//m_useTimedb    = true;
-	//m_useSectiondb = true;
+	m_useSectiondb = g_conf.m_useSectiondb;
 	//m_useRevdb     = true;
 	m_useSecondaryRdbs = false;
 
@@ -5699,8 +5701,12 @@ Sections *XmlDoc::getSections ( ) {
 	//HashTableX *rvt = getRootVotingTable();
 	//if ( ! rvt || rvt == (void *)-1 ) return (Sections *)rvt;
 
-	//SectionVotingTable *osvt = getOldSectionVotingTable();
-	//if ( ! osvt || osvt == (void *)-1 ) return (Sections *)osvt;
+	// emmanuel:
+	// this hash table maps a section "x-path" AND contained content hash
+	// TO the # of pages we've crawled from this site that had the same
+	// content and the # that had different content.
+	SectionVotingTable *osvt = getOldSectionVotingTable();
+	if ( ! osvt || osvt == (void *)-1 ) return (Sections *)osvt;
 
 	uint32_t *tph = getTagPairHash32();
 	if ( ! tph || tph == (uint32_t *)-1 ) return (Sections *)tph;
@@ -5853,7 +5859,6 @@ Sections *XmlDoc::getSections ( ) {
 	return &m_sections;
 }
 
-/*
 SectionVotingTable *XmlDoc::getNewSectionVotingTable ( ) {
 	if ( m_nsvtValid ) return &m_nsvt;
 	// need sections
@@ -5878,14 +5883,14 @@ SectionVotingTable *XmlDoc::getNewSectionVotingTable ( ) {
 	//   into m_osvt directly!
 	// . we no longer have root voting table!
 	if ( ! ss->addVotes ( &m_nsvt , *tph ) ) return NULL;
-	// tally the section votes from the dates
-	if ( ! dp->addVotes ( &m_nsvt ) ) return NULL;
+	// . tally the section votes from the dates
+	// . turn this off for now
+	//if ( ! dp->addVotes ( &m_nsvt ) ) return NULL;
 	// our new section voting table is now valid, and ready to be added
 	// to sectiondb by calling SectionVotingTable::hash()
 	m_nsvtValid = true;
 	return &m_nsvt;
 }
-*/
 
 
 //*/
@@ -6173,15 +6178,22 @@ SectionStats *XmlDoc::getSectionStats ( long long secHash64 ){
 	return &msg3a->m_sectionStats;
 }
 
-/*
 // . for all urls from this subdomain...
 // . EXCEPT root url since we use msg17 to cache that, etc.
 SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 
 	if ( m_osvtValid ) return &m_osvt;
 
-	// do not consult sectiondb if we are set from the title rec,
-	// that way we avoid parsining inconsistencies since sectiondb changes!
+	// return empty voting table if not using sectiondb for this collection
+	if ( ! m_useSectiondb ) {
+		m_osvtValid = true;
+		m_osvt.m_totalSiteVoters = 0;
+		return &m_osvt;
+	}
+
+	// do not consult sectiondb if we are set from the title rec
+	// (serialized XmlDoc on disk), that way we avoid parsining 
+	// inconsistencies since sectiondb changes all the time
 	if ( m_setFromTitleRec ) {
 		char *p = ptr_sectiondbData;
 		m_osvtValid = true;
@@ -6214,6 +6226,8 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	long long *d = getDocId();
 	if ( ! d || d == (long long *)-1 ) return (SectionVotingTable *)d;
 
+	// . if this is 0 that means we have not read any lists from disk in
+	//   sectiondb yet, so initialize the start key for the disk read
 	// . for us, dates are really containers of the flags and tag hash
 	// . init this up here, it is re-set if we re-call getSectiondbList()
 	//   because there were too many records in it to handle in one read
@@ -6264,7 +6278,11 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	// datedb to see if we got adequate data as to what sections
 	// are the article sections
 
-	// only get the list once
+	CollectionRec *cr = getCollRec();
+	if ( ! cr ) return NULL;
+
+	// . if we have to read some sectiondb records from disk then do it
+	// . only get the list once
 	if ( m_numSectiondbReads < m_numSectiondbNeeds ) {
 		// only do this once
 		m_numSectiondbReads++;
@@ -6275,10 +6293,11 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 		// shortcut
 		Msg0 *m = &m_msg0;
 		// get the group this list is in (split = false)
-		unsigned long gid = getGroupId ( RDB_SECTIONDB,
-						 (char *)&m_sectiondbStartKey);
+		unsigned long shard ;
+		shard = g_hostdb.getShardNum(RDB_SECTIONDB,
+					     (char *)&m_sectiondbStartKey);
 		// we need a group # from the groupId
-		long split = g_hostdb.getGroupNum ( gid );
+		//long split = g_hostdb.getGroupNum ( gid );
 		// note it
 		//logf(LOG_DEBUG,"sections: "
 		//     "reading list from sectiondb: "
@@ -6297,7 +6316,7 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 				    0                       , // maxCacheAge
 				    false                   , // addToCache
 				    RDB_SECTIONDB           , // was RDB_DATEDB
-				    m_coll                  ,
+				    cr->m_coll              ,
 				    &m_secdbList            ,
 				    (char *)&m_sectiondbStartKey ,
 				    (char *)&end            ,
@@ -6321,7 +6340,7 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 				    true  ,  // allowpagecache?
 				    false ,  // forceLocalIndexdb?
 				    false ,  // doIndexdbSplit?
-				    split ))
+				    shard ) ) // split ))
 			// return -1 if blocks
 			return (SectionVotingTable *)-1;
 		// error?
@@ -6354,13 +6373,14 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	// no longer bother re-calling, because facebook is way slow...
 	if ( limitSectiondb ) recall = false;
 
+	// . emmanuel:
 	// . returns false and sets g_errno on error
 	// . compile the votes from sectiondb for this site into a hashtable
 	// . m_osvt is a SectionVotingTable and each entry in the hashtable
 	//   is a SectionVote class.
-	// . the taghash is the key of the vote and is a hash of all the
-	//   nested tags the section is in. 
-	// . another vote uses the tag hash hashed with the hash of the
+	// . the taghash is the key of the SectionVote and is a hash of all the
+	//   nested tags the section is in. (hash of the "x-path" w/ enums)
+	// . another SectionVote uses the tag hash hashed with the hash of the
 	//   content contained by the section
 	// . using these two vote counts we set Section::m_votesForDup 
 	//   or Section::m_votesForNotDup counts which let us know how the
@@ -6368,7 +6388,7 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	// . SectionVote::m_score is always 1.0 from what i can tell
 	//   cuz it seems like addVote*() always uses a score of 1.0
 	// . SectionVote::m_numSampled is how many times that tagHash
-	//   occurs in the document.
+	//   occurs in that individual document.
 	if ( ! m_osvt.addListOfVotes(&m_secdbList,
 				     &lastKey,
 				     *tph,
@@ -6381,6 +6401,8 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 		log("xmldoc: added sectiondblist size=%li recall=%li",
 		    m_secdbList.m_listSize,(long)recall);
 
+	// . for some reason we got fewer sectiondb records than requested
+	//   so we have to re-call msg0 to get more
 	// . recall? yes if we had to truncate our list...
 	// . we need to be able to scan all votes for the website... that is
 	//   why we recall here
@@ -6406,8 +6428,9 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	}
 
 	//
-	// set ptr_sectiondbData so this can be set from a title rec without
-	// having to lookup in sectiondb again which might have changed!
+	// . serialize m_osvt into m_sectiondbData buffer
+	// . set ptr_sectiondbData so this can be set from a title rec without
+	//   having to lookup in sectiondb again which might have changed!
 	//
 	m_sectiondbData.purge();
 	// alloc
@@ -6415,7 +6438,8 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	if ( ! m_sectiondbData.reserve(need) )
 		// oom error?
 		return NULL;
-	// serialize this number
+	// . serialize this number
+	// . this is how many voting pages there were on this site
 	m_sectiondbData.pushLong(m_osvt.m_totalSiteVoters);
 	// serialize the hashtablex
         m_osvt.m_svt.serialize ( &m_sectiondbData );
@@ -6426,7 +6450,6 @@ SectionVotingTable *XmlDoc::getOldSectionVotingTable ( ) {
 	m_osvtValid = true;
 	return &m_osvt;
 }
-*/
 
 long *XmlDoc::getLinkSiteHashes ( ) {
 	if ( m_linkSiteHashesValid ) 
@@ -19543,7 +19566,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	long long *pch64 = getExactContentHash64();
 	if ( ! pch64 || pch64 == (void *)-1 ) return (char *)pch64;
 
-	/*
 	// get the voting table which we will add to sectiondb
 	SectionVotingTable *nsvt = NULL;
 	SectionVotingTable *osvt = NULL;
@@ -19552,6 +19574,7 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	// cuz then there is revdb, so we are 30%. so that's a no go.
 	bool addSectionVotes = false;
 	if ( nd ) addSectionVotes = true;
+	if ( ! m_useSectiondb ) addSectionVotes = false;
 	// to save disk space no longer add the roots! nto only saves sectiondb
 	// but also saves space in revdb
 	//if ( nd && *isRoot ) addSectionVotes = true;
@@ -19562,7 +19585,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 		osvt = getNewSectionVotingTable();
 		if ( ! osvt || osvt == (void *)-1 ) return (char *)osvt;
 	}
-	*/
 
 	// get the addresses for hashing tag hashes that indicate place names
 	Addresses *na = NULL;
@@ -19897,7 +19919,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	//if ( ! od && m_skipIndexing && needNoSplit ) { char *xx=NULL;*xx=0; }
 
 
-	/*
 	setStatus ( "hashing sectiondb keys" );
 	// add in special sections keys. "ns" = "new sections", etc.
 	// add in the special nosplit datedb terms from the Sections class
@@ -19929,7 +19950,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	//needSectiondb += st2.m_numSlotsUsed * (16+svs+1);
 	// add it in
 	need += needSectiondb;
-	*/
 
 
 	// Sections::respiderLineWaiters() adds one docid-based spider rec
@@ -20279,7 +20299,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	verifyMetaList( m_metaList , m_p );
 	*/
 
-	/*
 	//
 	// ADD SECTIONS SPECIAL TERMS
 	//
@@ -20297,7 +20316,6 @@ char *XmlDoc::getMetaList ( bool forDelete ) {
 	//st2.reset();
 	// sanity check
 	verifyMetaList( m_metaList , m_p , forDelete );
-	*/
 
 
 	//
@@ -29984,10 +30002,10 @@ bool XmlDoc::printDoc ( SafeBuf *sb ) {
 	//
 	Sections *sections = getSections();
 	if ( ! sections ||sections==(Sections *)-1) {char*xx=NULL;*xx=0;}
-	//SectionVotingTable *nsvt = getNewSectionVotingTable();
-	//if ( ! nsvt || nsvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
-	//SectionVotingTable *osvt = getOldSectionVotingTable();
-	//if ( ! osvt || osvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
+	SectionVotingTable *nsvt = getNewSectionVotingTable();
+	if ( ! nsvt || nsvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
+	SectionVotingTable *osvt = getOldSectionVotingTable();
+	if ( ! osvt || osvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
 
 
 	// these are nice
@@ -31021,10 +31039,10 @@ bool XmlDoc::printRainbowSections ( SafeBuf *sb , HttpRequest *hr ) {
 	if ( hr ) sections = getSectionsWithDupStats();
 	else      sections = getSections();
 	if ( ! sections) return true;if (sections==(Sections *)-1)return false;
-	//SectionVotingTable *nsvt = getNewSectionVotingTable();
-	//if ( ! nsvt || nsvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
-	//SectionVotingTable *osvt = getOldSectionVotingTable();
-	//if ( ! osvt || osvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
+	SectionVotingTable *nsvt = getNewSectionVotingTable();
+	if ( ! nsvt || nsvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
+	SectionVotingTable *osvt = getOldSectionVotingTable();
+	if ( ! osvt || osvt == (void *)-1 ) {char*xx=NULL;*xx=0;}
 	Words *words = getWords();
 	if ( ! words ) return true; if ( words == (Words *)-1 ) return false;
 	Phrases *phrases = getPhrases();

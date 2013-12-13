@@ -661,7 +661,7 @@ class Sections {
 		   long            bufSize     ) ;
 
 
-	//bool addVotes(class SectionVotingTable *nsvt, uint32_t tagPairHash );
+	bool addVotes(class SectionVotingTable *nsvt, uint32_t tagPairHash );
 
 	bool verifySections ( ) ;
 
@@ -1023,7 +1023,6 @@ public:
 	float m_numSampled;
 };
 
-/*
 class SectionVotingTable {
  public:
 
@@ -1090,7 +1089,6 @@ class SectionVotingTable {
 	long m_totalSiteVoters;
 	//long m_totalSimilarLayouts;
 };
-*/
 
 //
 // BEGIN SECTION TYPES

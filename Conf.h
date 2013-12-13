@@ -245,6 +245,9 @@ class Conf {
 	long m_statsdbMaxDiskPageCacheMem;
 	//long m_statsdbMinFilesToMerge;
 	bool m_useStatsdb;
+
+	bool m_useSectiondb;
+
 	//bool m_statsdbSnapshots;
 	//bool m_statsdbPageEnabled;
 

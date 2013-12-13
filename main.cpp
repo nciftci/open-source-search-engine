@@ -2717,8 +2717,8 @@ int main ( int argc , char *argv[] ) {
 	if ( ! g_monitordb.init()     ) {
 		log("db: Monitordb init failed."   ); return 1; }
 	// sectiondb
-	//if ( ! g_sectiondb.init()     ) {
-	//	log("db: Sectiondb init failed."   ); return 1; }
+	if ( g_conf.m_useSectiondb && ! g_sectiondb.init()     ) {
+		log("db: Sectiondb init failed."   ); return 1; }
 	//if ( ! g_placedb.init()     ) {
 	//	log("db: Placedb init failed."   ); return 1; }
 	// collectiondb, does not use rdb, loads directly from disk

@@ -11831,7 +11831,7 @@ void gotSectiondbListWrapper ( void *state ) {
 	THIS->m_callback ( THIS->m_state );
 }
 */
-/*
+
 // returns false and sets g_errno on error
 bool Sections::addVotes ( SectionVotingTable *nsvt , uint32_t tagPairHash ) {
 
@@ -11881,8 +11881,7 @@ SectionVotingTable::SectionVotingTable ( ) {
 	m_totalSiteVoters     = 0;
 	//m_totalSimilarLayouts = 0;
 }
-*/
-/*
+
 // . returns false if blocked, returns true and sets g_errno on error
 // . compile the datedb list into a hash table
 // . we serialize this hash table into TitleRec::ptr_sectionsData during
@@ -11994,7 +11993,6 @@ bool SectionVotingTable::addListOfVotes ( RdbList *list,
 	// we are done
 	return true;
 }
-*/
 
 // this is a function because we also call it from addImpliedSections()!
 void Sections::setNextBrotherPtrs ( bool setContainer ) {
@@ -12172,7 +12170,6 @@ void Sections::setNextSentPtrs ( ) {
 	}
 }
 
-/*
 // returns false and sets g_errno on error
 bool SectionVotingTable::addVote3 ( long        turkTagHash ,
 				    long        sectionType ,
@@ -12219,7 +12216,6 @@ bool SectionVotingTable::addVote3 ( long        turkTagHash ,
 
 	return true;
 }
-*/
 
 /*
 // . no longer use single bit flags, sec_t
@@ -12383,7 +12379,7 @@ void Sections::getArticleRange ( long *start , long *end ) {
 	*end   = m_articleEndWord;
 }
 */
-/*
+
 // . store our "votes" into datedb
 // . each vote key is:
 //   siteAndTagPairHash(termId)|tagHash(date)|secTypeEnum(score)|docId
@@ -12492,7 +12488,6 @@ bool SectionVotingTable::hash ( long long docId ,
 
 	return true;
 }
-*/
 
 /*
 // add docid-based forced spider recs into the metalist
