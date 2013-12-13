@@ -7853,17 +7853,8 @@ void Parms::init ( ) {
 	m++;
 
 	m->m_title = "use sectiondb";
-	m->m_desc  = "Store X-path hash information";
-	m->m_cgi   = "usdb"; 
-	m->m_off   = (char *)&g_conf.m_useSectiondb - g;
-	m->m_type  = TYPE_BOOL;
-	m->m_def   = "0";
-	m->m_group = 0;
-	m++;
-
-	m->m_title = "use sectiondb";
 	m->m_desc  = "For storing X-path information.";
-	m->m_cgi   = "usdb"; 
+	m->m_cgi   = "uscdb"; 
 	m->m_off   = (char *)&g_conf.m_useSectiondb - g;
 	m->m_type  = TYPE_BOOL;
 	m->m_def   = "0";
