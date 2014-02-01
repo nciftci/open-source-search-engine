@@ -2505,7 +2505,7 @@ static bool printResult ( SafeBuf &sb,
 				mr->m_docId ); 
 
 	// the new links
-	if ( si->m_format == FORMAT_HTML && g_conf.m_isMattWells ) {
+	if ( si->m_format == FORMAT_HTML && g_conf.m_isMattWells && 1 == 0 ) {
 		//sb.safePrintf(" - <a href=\"/scoring?"
 		//	      "c=%s&\">scoring</a>",
 		//	      coll );
