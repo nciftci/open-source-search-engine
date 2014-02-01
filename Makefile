@@ -27,7 +27,7 @@ LD_PATH=./gcc/
 DEFS = -D_REENTRANT_ -D_CHECK_FORMAT_STRING_ 
 
 # make the "gb" static so it does not do any dynamic linking with unknown files
-CPPFLAGS = -I. -I./include/ -g -Wall -pipe -static
+CPPFLAGS = -I. -I./include/ -g -Wall -pipe -static -Wno-uninitialized
 
 # we need all these libraries
 LIBS = -L. ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a ./gcc/libgcc.a  ./gcc/crt1.o ./gcc/libc.a ./gcc/libstdc++.a  

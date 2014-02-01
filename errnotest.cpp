@@ -34,10 +34,12 @@ int startup ( void *state ) {
 	// this sets errno, but does not seem to call our __errno_location
 	// override, BUT does seem to not affect "errno" in main() either!
 	// maybe this is the TLS support?
-	int bytes = read(-9,buf,5);
+	//int bytes = 
+	read(-9,buf,5);
 	//errno = 7; // E2BIG;
 	//assert ( errno && bytes == -1 );
 	g_errno = errno;
+	return 1;
 }
 
 
