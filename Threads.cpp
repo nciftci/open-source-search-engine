@@ -91,7 +91,8 @@ static long s_bad    = 0;
 static long s_badPid = -1;
 #endif
 
-#define MAX_PID 32767
+//#define MAX_PID 32767
+#define MAX_PID 65536
 
 #ifndef PTHREADS
 
