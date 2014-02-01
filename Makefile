@@ -26,8 +26,16 @@ LD_PATH=./gcc/
 
 DEFS = -D_REENTRANT_ -D_CHECK_FORMAT_STRING_ 
 
+# get name of host being compiled on
+HOST=$(shell hostname)
+
+ifeq ("titan","$(HOST)")
+# Matt Wells has a few little things to prevent bots from querying the site
+CPPFLAGS = -I. -I./include/ -g -Wall -pipe -static -Wno-uninitialized -DMATTWELLS
+else
 # make the "gb" static so it does not do any dynamic linking with unknown files
 CPPFLAGS = -I. -I./include/ -g -Wall -pipe -static -Wno-uninitialized
+endif
 
 # we need all these libraries
 LIBS = -L. ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a ./gcc/libgcc.a  ./gcc/crt1.o ./gcc/libc.a ./gcc/libstdc++.a  
@@ -94,14 +102,6 @@ OBJS =  Tfndb.o UdpSlot.o Rebalance.o \
 	Dates.o Sections.o SiteGetter.o Syncdb.o \
 	Placedb.o Address.o Test.o GeoIP.o GeoIPCity.o Synonyms.o \
 	Cachedb.o Monitordb.o dlstubs.o PageCrawlBot.o Json.o
-
-
-# my machine, titan, runs the old 2.4 kernel, it does not use pthreads because
-# they were very buggy in 1999. Plus they are still kind of slow even today,
-# in 2013. So it just uses clone() and does its own "threading". Unfortunately,
-# the way it works is not even possible on newer kernels because they no longer
-# allow you to override the _errno_location() function. -- matt
-#CPPFLAGS = -I/usr/include/ -I/usr/include/i386-linux-gnu -g -Wall -pipe -Wno-write-strings -Wno-uninitialized -static
 
 
 all: gb
