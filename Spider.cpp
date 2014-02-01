@@ -11254,10 +11254,12 @@ void gotCrawlInfoReply ( void *state , UdpSlot *slot ) {
 	// otherwise, if reply was good it is the last known good now!
 	else {
 		// free the old good one and replace it with the new one
-		if ( h->m_lastKnownGoodCrawlInfoReply )
+		if ( h->m_lastKnownGoodCrawlInfoReply ) {
+			//log("spider: skiipping possible bad free!!!! until we fix");
 			mfree ( h->m_lastKnownGoodCrawlInfoReply , 
 				h->m_replyAllocSize , 
 				"lknown" );
+		}
 		// add in the new good in case he goes down in the future
 		h->m_lastKnownGoodCrawlInfoReply    = (char *)ptr;
 		h->m_lastKnownGoodCrawlInfoReplyEnd = (char *)end;
