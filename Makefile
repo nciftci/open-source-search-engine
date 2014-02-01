@@ -1,6 +1,40 @@
 SHELL = /bin/bash
 
-CC=g++
+#
+# try to nail down our build environment
+#
+# added gcc/
+# added include/
+
+# we now include our own gcc for compiling the code so we can use our
+# custom threads and not pthreads. also it keeps things more stable in general.
+# this variable is where gcc looks for stuff it needs.
+export COMPILER_PATH=./gcc/
+
+# so the "./gcc/ld" can load our version of libbfd-2.17.so
+export LD_LIBRARY_PATH=./gcc/
+
+# compile with out over stable and unchanging gcc
+CC=./gcc/gcc-2.95
+
+# same goes for the linker
+LD=./gcc/ld
+
+# i'm not sure if we need this, but here it is
+LD_PATH=./gcc/
+
+
+DEFS = -D_REENTRANT_ -D_CHECK_FORMAT_STRING_ 
+
+# make the "gb" static so it does not do any dynamic linking with unknown files
+CPPFLAGS = -I. -I./include/ -g -Wall -pipe -static
+
+# we need all these libraries
+LIBS = -L. ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a ./gcc/libgcc.a  ./gcc/crt1.o ./gcc/libc.a ./gcc/libstdc++.a  
+
+# use this for compiling helper executables like errnotest.cpp
+LIBS2 = ./gcc/crti.o ./gcc/crtbegin.o ./gcc/crt1.o ./gcc/libstdc++.a ./gcc/libc.a ./gcc/libgcc.a ./gcc/crtend.o ./gcc/crtn.o
+
 
 OBJS =  Tfndb.o UdpSlot.o Rebalance.o \
 	Msg13.o Mime.o IndexReadInfo.o \
@@ -61,53 +95,13 @@ OBJS =  Tfndb.o UdpSlot.o Rebalance.o \
 	Placedb.o Address.o Test.o GeoIP.o GeoIPCity.o Synonyms.o \
 	Cachedb.o Monitordb.o dlstubs.o PageCrawlBot.o Json.o
 
-CHECKFORMATSTRING = -D_CHECK_FORMAT_STRING_
 
-DEFS = -D_REENTRANT_ $(CHECKFORMATSTRING) -I.
-
-HOST=$(shell hostname)
-
-#print_vars:
-#	$(HOST)
-
-ifeq ("titan","$(HOST)")
 # my machine, titan, runs the old 2.4 kernel, it does not use pthreads because
 # they were very buggy in 1999. Plus they are still kind of slow even today,
 # in 2013. So it just uses clone() and does its own "threading". Unfortunately,
 # the way it works is not even possible on newer kernels because they no longer
 # allow you to override the _errno_location() function. -- matt
-CPPFLAGS = -m32 -g -Wall -pipe -Wno-write-strings -Wstrict-aliasing=0 -Wno-uninitialized -static -DMATTWELLS -DNEEDLICENSE
-LIBS = ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a
-else
-# use -m32 to force 32-bit mode compilation.
-# you might have to do apt-get install gcc-multilib to ensure that -m32 works.
-# -m32 should use /usr/lib32/ as the library path.
-# i also provide 32-bit libraries for linking that are not so easy to get.
-#
-# mdw. 11/17/2013. i took out the -D_PTHREADS_ flag (and -lpthread).
-# trying to use good ole' clone() again because it seems the errno location
-# thing is fixed by just ignoring it.
-#
-CPPFLAGS = -m32 -g -Wall -pipe -Wno-write-strings -Wstrict-aliasing=0 -Wno-uninitialized -static -DPTHREADS -Wno-unused-but-set-variable
-LIBS= -L. ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a ./libstdc++.a -lpthread
-endif
-
-# if you have seo.cpp link that in. This is not part of the open source
-# distribution but is available for interested parties.
-ifneq ($(wildcard seo.cpp),) 
-OBJS:=$(OBJS) seo.o
-endif
-
-
-
-# let's keep the libraries in the repo for easier bug reporting and debugging
-# in general if we can. the includes are still in /usr/include/ however...
-# which is kinda strange but seems to work so far.
-#LIBS= -L. ./libz.a ./libssl.a ./libcrypto.a ./libiconv.a ./libm.a ./libgcc.a ./libpthread.a ./libc.a ./libstdc++.a 
-
-
-
-#SRCS := $(OBJS:.o=.cpp) main.cpp
+#CPPFLAGS = -I/usr/include/ -I/usr/include/i386-linux-gnu -g -Wall -pipe -Wno-write-strings -Wno-uninitialized -static
 
 
 all: gb
@@ -116,10 +110,16 @@ g8: gb
 	scp gb g8:/p/gb.new
 	ssh g8 'cd /p/ ; ./gb stop ; ./gb installgb ; sleep 4 ; ./gb start'
 
-utils: addtest blaster dump hashtest makeclusterdb makespiderdb membustest monitor seektest urlinfo treetest dnstest dmozparse gbtitletest
-
 gb: $(OBJS) main.o $(LIBFILES)
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ main.o $(OBJS) $(LIBS)
+	$(LD) -L./gcc/ -static -o $@ ./gcc/crti.o ./gcc/crtbegin.o main.o $(OBJS) $(LIBS) ./gcc/crtend.o ./gcc/crtn.o
+
+
+errnotest:
+	$(CC) $(DEFS) $(CPPFLAGS) -static -c errnotest.cpp
+	$(LD) -static -o $@ $@.o $(LIBS2)
+
+dmozparse: $(OBJS) dmozparse.o
+	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
 
 
 iana_charset.cpp: parse_iana_charsets.pl character-sets supported_charsets.txt
@@ -128,111 +128,14 @@ iana_charset.cpp: parse_iana_charsets.pl character-sets supported_charsets.txt
 iana_charset.h: parse_iana_charsets.pl character-sets supported_charsets.txt
 	./parse_iana_charsets.pl < character-sets
 
-run_parser: test_parser
-	./test_parser ~/turkish.html
-
-test_parser: $(OBJS) test_parser.o Makefile 
-	g++ $(DEFS) $(CPPFLAGS) -o $@ test_parser.o $(OBJS) $(LIBS)
-test_parser2: $(OBJS) test_parser2.o Makefile 
-	g++ $(DEFS) $(CPPFLAGS) -o $@ test_parser2.o $(OBJS) $(LIBS)
-
-test_hash: test_hash.o $(OBJS)
-	g++ $(DEFS) $(CPPFLAGS) -o $@ test_hash.o $(OBJS) $(LIBS)
-test_norm: $(OBJS) test_norm.o
-	g++ $(DEFS) $(CPPFLAGS) -o $@ test_norm.o $(OBJS) $(LIBS)
-test_convert: $(OBJS) test_convert.o
-	g++ $(DEFS) $(CPPFLAGS) -o $@ test_convert.o $(OBJS) $(LIBS)
-
-supported_charsets: $(OBJS) supported_charsets.o supported_charsets.txt
-	g++ $(DEFS) $(CPPFLAGS) -o $@ supported_charsets.o $(OBJS) $(LIBS)
-gbchksum: gbchksum.o
-	g++ -g -Wall -o $@ gbchksum.o
-create_ucd_tables: $(OBJS) create_ucd_tables.o
-	g++ $(DEFS) $(CPPFLAGS) -o $@ create_ucd_tables.o $(OBJS) $(LIBS)
-
-ucd.o: ucd.cpp ucd.h
-
-ucd.cpp: parse_ucd.pl
-	./parse_ucd.pl UNIDATA/UnicodeData.txt ucd
 
 
-ipconfig: ipconfig.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o -lc
-blaster: $(OBJS) blaster.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-udptest: $(OBJS) udptest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-dnstest: $(OBJS) dnstest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-thunder: thunder.o
-	$(CC) $(DEFS) $(CPPFLAGS) -static -o $@ $@.o
-threadtest: threadtest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o -lpthread
-memtest: memtest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o 
-hashtest: hashtest.cpp
-	$(CC) -O3 -o hashtest hashtest.cpp
-hashtest0: hashtest
-	scp hashtest gb0:/a/
-membustest: membustest.cpp
-	$(CC) -O0 -o membustest membustest.cpp -static -lc
-mergetest: $(OBJS) mergetest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-addtest: $(OBJS) addtest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-addtest0: $(OBJS) addtest
-	bzip2 -fk addtest
-	scp addtest.bz2 gb0:/a/
-seektest: seektest.cpp
-	$(CC) -o seektest seektest.cpp -lpthread
-treetest: $(OBJ) treetest.o
-	$(CC) $(DEFS) -O2 $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-treetest0: treetest
-	bzip2 -fk treetest
-	scp treetest.bz2 gb0:/a/
-	ssh gb0 'cd /a/ ; rm treetest ; bunzip2 treetest.bz2'
-nicetest: nicetest.o
-	$(CC) -o nicetest nicetest.cpp
-
-
-monitor: $(OBJS) monitor.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ monitor.o $(OBJS) $(LIBS)
-reindex: $(OBJS) reindex.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-convert: $(OBJS) convert.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-maketestindex: $(OBJS) maketestindex.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-makespiderdb: $(OBJS) makespiderdb.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-makespiderdb0: makespiderdb
-	bzip2 -fk makespiderdb
-	scp makespiderdb.bz2 gb0:/a/
-makeclusterdb: $(OBJS) makeclusterdb.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-makeclusterdb0: makeclusterdb
-	bzip2 -fk makeclusterdb
-	scp makeclusterdb.bz2 gb0:/a/
-	ssh gb0 'cd /a/ ; rm makeclusterdb ; bunzip2 makeclusterdb.bz2'
-makefix: $(OBJS) makefix.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-makefix0: makefix
-	bzip2 -fk makefix
-	scp makefix.bz2 gb0:/a/
-urlinfo: $(OBJS) urlinfo.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $(OBJS) urlinfo.o $(LIBS)
-
-dmozparse: $(OBJS) dmozparse.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
-gbfilter: gbfilter.cpp
-	g++ -g -o gbfilter gbfilter.cpp -static -lc
-gbtitletest: gbtitletest.o
-	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+utils: addtest blaster dump hashtest makeclusterdb makespiderdb membustest monitor seektest urlinfo treetest dnstest dmozparse gbtitletest
 
 
 
 clean:
-	-rm -f *.o gb *.bz2 blaster udptest memtest hashtest membustest mergetest seektest addtest monitor reindex convert maketestindex makespiderdb makeclusterdb urlinfo gbfilter dnstest thunder dmozparse gbtitletest gmon.* GBVersion.cpp quarantine core core.*
+	-rm -f $(OBJS) gb *.bz2 blaster udptest memtest hashtest membustest mergetest seektest addtest monitor reindex convert maketestindex makespiderdb makeclusterdb urlinfo gbfilter dnstest thunder dmozparse gbtitletest gmon.* GBVersion.cpp quarantine core core.*
 
 .PHONY: GBVersion.cpp
 
@@ -461,7 +364,7 @@ Msg6a.o:
 
 # Stupid gcc-2.95 stabs debug can't handle such a big file.
 geo_ip_table.o: geo_ip_table.cpp geo_ip_table.h
-	$(CC) $(DEFS) -m32 -Wall -pipe -c $*.cpp 
+	$(CC) $(DEFS) -I./include -Wall -pipe -c $*.cpp 
 
 .cpp.o:
 	$(CC) $(DEFS) $(CPPFLAGS) -c $*.cpp 
@@ -486,4 +389,102 @@ depend:
 	$(CC) -MM $(DEFS) $(DPPFLAGS) *.cpp > Make.depend 
 
 -include Make.depend
+
+
+#run_parser: test_parser
+#	./test_parser ~/turkish.html
+#test_parser: $(OBJS) test_parser.o Makefile 
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ test_parser.o $(OBJS) $(LIBS)
+#test_parser2: $(OBJS) test_parser2.o Makefile 
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ test_parser2.o $(OBJS) $(LIBS)
+
+#test_hash: test_hash.o $(OBJS)
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ test_hash.o $(OBJS) $(LIBS)
+#test_norm: $(OBJS) test_norm.o
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ test_norm.o $(OBJS) $(LIBS)
+#test_convert: $(OBJS) test_convert.o
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ test_convert.o $(OBJS) $(LIBS)
+
+#supported_charsets: $(OBJS) supported_charsets.o supported_charsets.txt
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ supported_charsets.o $(OBJS) $(LIBS)
+#gbchksum: gbchksum.o
+#	g++ -g -Wall -o $@ gbchksum.o
+#create_ucd_tables: $(OBJS) create_ucd_tables.o
+#	g++ $(DEFS) $(CPPFLAGS) -o $@ create_ucd_tables.o $(OBJS) $(LIBS)
+
+#ucd.o: ucd.cpp ucd.h
+#
+#ucd.cpp: parse_ucd.pl
+#	./parse_ucd.pl UNIDATA/UnicodeData.txt ucd
+
+#ipconfig: ipconfig.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o -lc
+#blaster: $(OBJS) blaster.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#udptest: $(OBJS) udptest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#dnstest: $(OBJS) dnstest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#thunder: thunder.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -static -o $@ $@.o
+#threadtest: threadtest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o -lpthread
+#memtest: memtest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o 
+#hashtest: hashtest.cpp
+#	$(CC) -O3 -o hashtest hashtest.cpp
+#hashtest0: hashtest
+#	scp hashtest gb0:/a/
+#membustest: membustest.cpp
+#	$(CC) -O0 -o membustest membustest.cpp -static -lc
+#mergetest: $(OBJS) mergetest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#addtest: $(OBJS) addtest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#addtest0: $(OBJS) addtest
+#	bzip2 -fk addtest
+#	scp addtest.bz2 gb0:/a/
+#seektest: seektest.cpp
+#	$(CC) -o seektest seektest.cpp -lpthread
+#treetest: $(OBJ) treetest.o
+#	$(CC) $(DEFS) -O2 $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#treetest0: treetest
+#	bzip2 -fk treetest
+#	scp treetest.bz2 gb0:/a/
+#	ssh gb0 'cd /a/ ; rm treetest ; bunzip2 treetest.bz2'
+#nicetest: nicetest.o
+#	$(CC) -o nicetest nicetest.cpp
+
+
+#monitor: $(OBJS) monitor.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ monitor.o $(OBJS) $(LIBS)
+#reindex: $(OBJS) reindex.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#convert: $(OBJS) convert.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#maketestindex: $(OBJS) maketestindex.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#makespiderdb: $(OBJS) makespiderdb.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#makespiderdb0: makespiderdb
+#	bzip2 -fk makespiderdb
+#	scp makespiderdb.bz2 gb0:/a/
+#makeclusterdb: $(OBJS) makeclusterdb.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#makeclusterdb0: makeclusterdb
+#	bzip2 -fk makeclusterdb
+#	scp makeclusterdb.bz2 gb0:/a/
+#	ssh gb0 'cd /a/ ; rm makeclusterdb ; bunzip2 makeclusterdb.bz2'
+#makefix: $(OBJS) makefix.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+#makefix0: makefix
+#	bzip2 -fk makefix
+#	scp makefix.bz2 gb0:/a/
+#urlinfo: $(OBJS) urlinfo.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $(OBJS) urlinfo.o $(LIBS)
+#gbfilter: gbfilter.cpp
+#	g++ -g -o gbfilter gbfilter.cpp -static -lc
+#gbtitletest: gbtitletest.o
+#	$(CC) $(DEFS) $(CPPFLAGS) -o $@ $@.o $(OBJS) $(LIBS)
+
 

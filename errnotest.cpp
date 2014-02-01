@@ -16,7 +16,7 @@ static long s_bad = 0;
 static long s_badPid = -1;
 
 // WARNING: you MUST compile with -DREENTRANT for this to work
-int *__errno_location (void) {
+int *__errno_location (void) throw() {
 	long pid = (long) getpid();
 	s_called++;
 	if ( pid <= (long)MAX_PID ) return &s_errnos[pid];
