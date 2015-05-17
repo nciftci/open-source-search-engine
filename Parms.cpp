@@ -849,7 +849,7 @@ bool CommandInSync ( char *rec ) {
 //////////////////////
 
 
-static bool printDropDown   ( int32_t n , SafeBuf* sb, char *name, 
+static bool printDropDown   ( int32_t a,int32_t n , SafeBuf* sb, char *name, 
 			      int32_t selet , 
 			      bool includeMinusOne ,
 			      bool includeMinusTwo ) ;
@@ -1615,19 +1615,20 @@ bool printDiffbotDropDown ( SafeBuf *sb,char *name,char *THIS , SafeBuf *sx) {
 }
 */
 
-bool printDropDown ( int32_t n , SafeBuf* sb, char *name, int32_t select,
+bool printDropDown ( int32_t a,
+		     int32_t n , SafeBuf* sb, char *name, int32_t select,
 		     bool includeMinusOne ,
 		     bool includeMinusTwo ) {	// begin the drop down menu
 	sb->safePrintf ( "<select name=%s>", name );
 	char *s;
 	int32_t i = -1;
-	if ( includeMinusOne ) i = -1;
+	//if ( includeMinusOne ) i = -1;
 	// . by default, minus 2 includes minus 3, the new "FILTERED" priority
 	// . it is link "BANNED" but does not mean the url is low quality necessarily
-	if ( includeMinusTwo ) i = -3;
+	//if ( includeMinusTwo ) i = -3;
 
 	// no more DELETE, etc.
-	i = 0;
+	i = a;
 	if ( select < 0 ) select = 0;
 
 	for ( ; i < n ; i++ ) {
@@ -2452,14 +2453,22 @@ bool Parms::printParm ( SafeBuf* sb,
 		sprintf (p,"<input type=text name=%s value=\"%"INT32"\" "
 		"size=3>",cgi,*(char*)s);*/
 	else if ( t == TYPE_PRIORITY ) 
-		printDropDown ( MAX_SPIDER_PRIORITIES , sb , cgi , *s , 
+		// don't include priority 0 any more because we use that
+		// for url filter expressions whose maxspiders is set to 0
+		// so that higher-priority urls from the same firstip can
+		// take precedence so we don't clog the spiders on that firstip
+		printDropDown ( 1,MAX_SPIDER_PRIORITIES , sb , cgi , *s , 
 				false , false );
 	else if ( t == TYPE_PRIORITY2 ) {
 		// just show the parm name and value if printing in json
 		// if ( format==FORMAT_JSON) // isJSON )
 		// 	sb->safePrintf("\"%s\":%"INT32",\n",cgi,(int32_t)*(char *)s);
 		// else
-		printDropDown ( MAX_SPIDER_PRIORITIES , sb , cgi , *s ,
+		// don't include priority 0 any more because we use that
+		// for url filter expressions whose maxspiders is set to 0
+		// so that higher-priority urls from the same firstip can
+		// take precedence so we don't clog the spiders on that firstip
+		printDropDown ( 1,MAX_SPIDER_PRIORITIES , sb , cgi , *s ,
 				true , true );
 	}
 	// this url filters parm is an array of SAFEBUFs now, so each is
@@ -2487,7 +2496,7 @@ bool Parms::printParm ( SafeBuf* sb,
 		return true;
 
 	else if ( t == TYPE_RETRIES    ) 
-		printDropDown ( 4 , sb , cgi , *s , false , false );
+		printDropDown ( 0,4 , sb , cgi , *s , false , false );
 	else if ( t == TYPE_FILEUPLOADBUTTON    ) {
 		sb->safePrintf("<input type=file name=%s>",cgi);
 	}

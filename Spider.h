@@ -1162,6 +1162,17 @@ class SpiderColl {
 	int32_t      m_tailHopCount;
 	int64_t m_minFutureTimeMS;
 
+	char isInHasReplyCache ( class SpiderRequest *sreq ) ;
+	bool addUrlHash32ToHasReplyList ( class SpiderRequest *sreq ) ;
+	bool addListsToHasReplyCache ( ) ;
+
+	// hew 'hasreply' cache stuff for supplantation algorithm
+	RdbCache m_hasReplyCache;
+	class HasReplyList *m_tailHasReplyList;
+	class HasReplyList *m_headHasReplyList;
+	int32_t m_numHasReplyLists;
+
+
 	// these don't work because we only store one reply
 	// which overwrites any older reply. that's how the 
 	// key is. we can change the key to use the timestamp 
@@ -1189,7 +1200,7 @@ class SpiderColl {
 
 	void removeFromDoledbTable ( int32_t firstIp );
 
-	bool  addToDoleTable   ( SpiderRequest *sreq ) ;
+	bool  addToDoleTable   ( SpiderRequest *sreq , DOLEDBKEY *doledbKey ) ;
 
 	bool addDoleBufIntoDoledb (bool isFromCache,uint32_t cachedTimestamp);
 
@@ -1277,7 +1288,7 @@ class SpiderColl {
 	bool printWaitingTree ( ) ;
 
 	bool addToWaitingTree    ( uint64_t spiderTime , int32_t firstIp ,
-				   bool callForScan );
+				   bool callForScan , class SpiderRequest *sreq );
 	int32_t getNextIpFromWaitingTree ( );
 	uint64_t getNextSpiderTimeFromWaitingTree ( ) ;
 	void populateDoledbFromWaitingTree ( );
